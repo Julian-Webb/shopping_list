@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shopping_list/data/categories.dart';
 import 'package:shopping_list/models/category.dart';
 import 'package:shopping_list/models/grocery_item.dart';
@@ -19,17 +21,46 @@ class _NewItemState extends State<NewItem> {
   var _enteredName = '';
   var _enteredQuanitity = 1;
   var _selectedCategory = categories[Categories.other]!;
+  var _isSending = false;
 
-  void _saveItem() {
+  void _saveItem() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
+      setState(() {
+        _isSending = true;
+      });
+      final url = Uri.https(
+          'shopping-list-app-cedc6-default-rtdb.europe-west1.firebasedatabase.app',
+          'shopping-list.json');
+      // await let's us wait for the function to return
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(
+          {
+            'name': _enteredName,
+            'quantity': _enteredQuanitity,
+            'category': _selectedCategory.name,
+          },
+        ),
+      );
+      // the .then method let's us work with the response
+      // .then((response) => null);
+      // print(response.body);
+      // status codes with 1xx 2xx 3xx are good but >= 400 is bad
+      // print(response.statusCode);
+
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) {
+        return;
+      }
+      final Map<String, dynamic> resData = json.decode(response.body);
       Navigator.of(context).pop(
         GroceryItem(
-          id: DateTime.now().toString(),
-          name: _enteredName,
-          quantity: _enteredQuanitity,
-          category: _selectedCategory,
-        ),
+            id: resData['name'],
+            name: _enteredName,
+            quantity: _enteredQuanitity,
+            category: _selectedCategory),
       );
     }
   }
@@ -124,14 +155,22 @@ class _NewItemState extends State<NewItem> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () {
-                      _formKey.currentState!.reset();
-                    },
+                    onPressed: _isSending
+                        ? null
+                        : () {
+                            _formKey.currentState!.reset();
+                          },
                     child: const Text('Reset'),
                   ),
                   ElevatedButton(
-                    onPressed: _saveItem,
-                    child: const Text('Add item'),
+                    onPressed: _isSending ? null : _saveItem,
+                    child: _isSending
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(),
+                          )
+                        : const Text('Add item'),
                   ),
                 ],
               )
